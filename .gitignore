@@ -5,3 +5,4 @@ scanner/strace.go
 !/.gitignore
 
 bin/
+deserialized/

@@ -2,7 +2,7 @@ package implicit_dependencies
 
 import (
 	"io/ioutil"
-	. "github.com/shankarapailoor/moonshine/logging"
+	. "github.com/RandomLemon/moonshine/logging"
 	"encoding/json"
 )
 

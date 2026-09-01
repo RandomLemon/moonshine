@@ -1,9 +1,9 @@
 package parser
 
 import (
-	"github.com/shankarapailoor/moonshine/strace_types"
+	"github.com/RandomLemon/moonshine/strace_types"
 	"github.com/google/syzkaller/prog"
-	. "github.com/shankarapailoor/moonshine/logging"
+	. "github.com/RandomLemon/moonshine/logging"
 )
 
 func ParseInnerCall(syzType prog.Type, straceType *strace_types.Call, ctx *Context) prog.Arg {

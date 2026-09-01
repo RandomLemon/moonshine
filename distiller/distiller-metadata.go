@@ -1,22 +1,23 @@
 package distiller
 
 import (
-	"github.com/google/syzkaller/prog"
 	"fmt"
-	"sort"
 	"os"
-	"github.com/shankarapailoor/moonshine/tracker"
+	"sort"
+
+	"github.com/google/syzkaller/prog"
+	"github.com/RandomLemon/moonshine/tracker"
 )
 
 type DistillerMetadata struct {
-	StatFile string
-	Seeds Seeds
-	DistilledProgs []*prog.Prog
-	CallToSeed map[*prog.Call]*Seed
-	CallToDistilledProg map[*prog.Call]*prog.Prog
-	CallToIdx map[*prog.Call]int
+	StatFile                string
+	Seeds                   Seeds
+	DistilledProgs          []*prog.Prog
+	CallToSeed              map[*prog.Call]*Seed
+	CallToDistilledProg     map[*prog.Call]*prog.Prog
+	CallToIdx               map[*prog.Call]int
 	UpstreamDependencyGraph map[*Seed]map[int]map[prog.Arg][]prog.Arg
-	DownstreamDependents map[*Seed]map[int]bool
+	DownstreamDependents    map[*Seed]map[int]bool
 }
 
 func (d *DistillerMetadata) GetAllDownstreamDependents(seed *Seed, seen map[int]bool) []*prog.Call {
@@ -51,9 +52,9 @@ func (d *DistillerMetadata) GetAllUpstreamDependents(seed *Seed, seen map[int]bo
 	for idx, _ := range d.UpstreamDependencyGraph[seed] {
 		call := seed.Prog.Calls[idx]
 		if seen[idx] || idx == seed.CallIdx {
-			continue  // skip calls we've already added, and skip the current seed
+			continue // skip calls we've already added, and skip the current seed
 		}
-		seen[idx] = true  // mark that we're adding this call at position idx
+		seen[idx] = true // mark that we're adding this call at position idx
 		if s, ok := d.CallToSeed[call]; ok {
 			calls = append(calls, call)
 			/* recursively add upstream dependents */
@@ -213,7 +214,7 @@ func (d *DistillerMetadata) isDependent(arg prog.Arg, seed *Seed, state *tracker
 		return nil
 	}
 	//May need to support more kinds
-	switch a := arg.(type){
+	switch a := arg.(type) {
 	case *prog.ResultArg:
 		//fmt.Printf("%v\n", args[arg.Res])
 		if _, ok := args[a.Res]; ok {
@@ -288,7 +289,7 @@ func (d *DistillerMetadata) isDependent(arg prog.Arg, seed *Seed, state *tracker
 			}
 		}
 	}
-	args[arg] = callIdx  // this arg is used in the call at position callIdx in prog
+	args[arg] = callIdx // this arg is used in the call at position callIdx in prog
 	if _, ok := arg.(*prog.ResultArg); ok {
 		arg.(*prog.ResultArg).Set(nil)
 	}

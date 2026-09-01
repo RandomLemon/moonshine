@@ -6,8 +6,8 @@ import (
 	"bufio"
 	"strings"
 	"strconv"
-	"github.com/shankarapailoor/moonshine/strace_types"
-	. "github.com/shankarapailoor/moonshine/logging"
+	"github.com/RandomLemon/moonshine/strace_types"
+	. "github.com/RandomLemon/moonshine/logging"
 )
 
 const(

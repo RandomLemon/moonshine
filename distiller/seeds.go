@@ -2,7 +2,7 @@ package distiller
 
 import (
 	"github.com/google/syzkaller/prog"
-	"github.com/shankarapailoor/moonshine/tracker"
+	"github.com/RandomLemon/moonshine/tracker"
 )
 
 type Seed struct {

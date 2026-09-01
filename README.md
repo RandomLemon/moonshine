@@ -52,8 +52,8 @@ $ export PATH=$PATH:$HOME/go/bin
 
 ### Build
 ```bash
-go get -u -d github.com/shankarapailoor/moonshine/...
-cd $GOPATH/src/github.com/shankarapailoor/moonshine
+go get -u -d github.com/RandomLemon/moonshine/...
+cd $GOPATH/src/github.com/RandomLemon/moonshine
 make
 ```
 
@@ -104,7 +104,7 @@ MoonShine needs to know the coverage achieved by each call in a trace in order t
 $ cd ~
 $ git clone https://github.com/strace/strace strace
 $ git checkout a8d2417e97e71ae01095bee1a1e563b07f2d6b41
-$ git apply $GOPATH/src/github.com/shankarapailoor/moonshine/strace_kcov.patch
+$ git apply $GOPATH/src/github.com/RandomLemon/moonshine/strace_kcov.patch
 $ ./bootstrap
 ...
 $ ./configure

@@ -1,31 +1,32 @@
 package config
 
 import (
-	"io/ioutil"
 	"encoding/json"
-	. "github.com/shankarapailoor/moonshine/logging"
+	"io/ioutil"
+
+	. "github.com/RandomLemon/moonshine/logging"
 )
 
 type SyzStraceConfig struct {
 	CorpusGenConf CorpusGenConfig `json:"corpus_gen_conf"`
-	ParserConf ParserConfig `json:"parser_conf"`
-	DistillConf DistillConfig `json:"distill_conf"`
+	ParserConf    ParserConfig    `json:"parser_conf"`
+	DistillConf   DistillConfig   `json:"distill_conf"`
 }
 
 type CorpusGenConfig struct {
 	ConfigPath string `json:"workload_config"`
-	Tracer string
-	Executor string
-	SshKey string
-	SshUser string
-	SshPort int
+	Tracer     string
+	Executor   string
+	SshKey     string
+	SshUser    string
+	SshPort    int
 	GceConfig
 	DestinationDir string `json:"dest_dir"`
 }
 
 type DistillConfig struct {
-	Type string
-	Stats string `json:"stats"`
+	Type             string
+	Stats            string `json:"stats"`
 	ImplicitDepsFile string `json:"implicit_dependencies"`
 }
 
@@ -37,9 +38,9 @@ type ParserConfig struct {
 }
 
 type LocalConfig struct {
-	InputDirectory string
-	Files []string
-	Filter []string
+	InputDirectory  string
+	Files           []string
+	Filter          []string
 	OutputDirectory string
 }
 

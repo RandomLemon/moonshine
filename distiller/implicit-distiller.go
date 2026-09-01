@@ -1,15 +1,16 @@
 package distiller
 
 import (
+	"fmt"
+	"math/rand"
+	"os"
+	"sort"
+	"strings"
+	"time"
+
 	"github.com/google/syzkaller/pkg/log"
 	"github.com/google/syzkaller/prog"
-	"github.com/shankarapailoor/moonshine/implicit-dependencies"
-	"fmt"
-	"sort"
-	"os"
-	"strings"
-	"math/rand"
-	"time"
+	"github.com/RandomLemon/moonshine/implicit-dependencies"
 )
 
 type ImplicitDistiller struct {
@@ -24,7 +25,7 @@ func (d *ImplicitDistiller) Add(seeds Seeds) {
 		d.CallToSeed[seed.Call] = seed
 		d.UpstreamDependencyGraph[seed] = make(map[int]map[prog.Arg][]prog.Arg, 0)
 		seed.ArgMeta = make(map[prog.Arg]bool, 0)
-		for call,idx := range seed.DependsOn {
+		for call, idx := range seed.DependsOn {
 			if _, ok := d.UpstreamDependencyGraph[seed][idx]; !ok {
 				d.UpstreamDependencyGraph[seed][idx] = make(map[prog.Arg][]prog.Arg, 0)
 			}
@@ -39,7 +40,7 @@ func (d *ImplicitDistiller) getHeavyHitters(seeds Seeds) Seeds {
 	heavyHitters := make(Seeds, 0)
 	contributing_seeds := 0
 	for _, seed := range seeds {
-		ips := d.Contributes(seed, seenIps)  /* how many unique Ips does seed contribute */
+		ips := d.Contributes(seed, seenIps) /* how many unique Ips does seed contribute */
 		if ips > 0 {
 			heavyHitters.Add(seed)
 			contributing_seeds += 1
@@ -54,7 +55,7 @@ func (d *ImplicitDistiller) getRandomSeeds(seeds Seeds) Seeds {
 	randHitters := make(Seeds, 0)
 	totalCalls := len(seeds)
 	rand.Seed(time.Now().Unix())
-	for i:=0; i < len(heavyHitters); i++ {
+	for i := 0; i < len(heavyHitters); i++ {
 		idx := rand.Int31n(int32(totalCalls))
 		randHitters.Add(seeds[idx])
 	}
@@ -64,7 +65,7 @@ func (d *ImplicitDistiller) getRandomSeeds(seeds Seeds) Seeds {
 func (d *ImplicitDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog) {
 	seeds := d.Seeds
 	fmt.Printf("Performing implicit distillation with %d calls contributing coverage\n", len(seeds))
-	sort.Sort(sort.Reverse(seeds))  // sort seeds by inidividual coverage.
+	sort.Sort(sort.Reverse(seeds)) // sort seeds by inidividual coverage.
 	heavyHitters := make(Seeds, 0)
 	var target *prog.Target = nil
 	for _, prog := range progs {
@@ -117,10 +118,10 @@ func (d *ImplicitDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog)
 		progs_ += 1
 		totalLen += len(prog_.Calls)
 	}
-	if (progs_ == 0) {
+	if progs_ == 0 {
 		return
 	}
-	avgLen := totalLen/progs_
+	avgLen := totalLen / progs_
 	fmt.Fprintf(os.Stderr, "Average Program Length: %d\n", avgLen)
 	fmt.Fprintf(os.Stderr,
 		"Total Contributing calls: %d out of %d, in %d implicitly-distilled programs that consist of: %d calls\n",
@@ -136,7 +137,7 @@ func (d *ImplicitDistiller) AddToDistilledProg(seed *Seed) {
 	totalCalls := make([]*prog.Call, 0)
 
 	if d.CallToDistilledProg[seed.Call] != nil {
-		return  /* skip call if already in a distilled program */
+		return /* skip call if already in a distilled program */
 	}
 	seenMap := make(map[int]bool, 0)
 	upstreamCalls := make([]*prog.Call, 0)
@@ -146,20 +147,20 @@ func (d *ImplicitDistiller) AddToDistilledProg(seed *Seed) {
 	upstreamCalls = d.AddImplicitDependencies(upstreamCalls, seed, seenMap)
 
 	distinctProgs := d.getAllProgs(upstreamCalls)
-	if len(distinctProgs) > 0 {  // we need to merge!
+	if len(distinctProgs) > 0 { // we need to merge!
 		// collect all the calls from all distinct progs, plus our upstreamCalls together
 		totalCalls = append(d.getCalls(distinctProgs), upstreamCalls...)
 	} else {
 		totalCalls = upstreamCalls
 	}
 
-	callIndexes = d.uniqueCallIdxs(totalCalls)  // dedups and sorts calls by their program idx
+	callIndexes = d.uniqueCallIdxs(totalCalls) // dedups and sorts calls by their program idx
 	for _, idx := range callIndexes {
 		call := seed.Prog.Calls[idx]
-		d.CallToDistilledProg[call] = distilledProg  // set calls to point to new, merged program
+		d.CallToDistilledProg[call] = distilledProg // set calls to point to new, merged program
 		distilledProg.Calls = append(distilledProg.Calls, call)
 	}
-	d.BuildDependency(seed, distilledProg)  // set args to point to dependent args.
+	d.BuildDependency(seed, distilledProg) // set args to point to dependent args.
 }
 
 func syscallKeyword(syscall string) string {

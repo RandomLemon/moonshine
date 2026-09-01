@@ -2,8 +2,8 @@ package main
 
 import (
 	"github.com/google/syzkaller/pkg/log"
-	. "github.com/shankarapailoor/moonshine/scanner"
-	. "github.com/shankarapailoor/moonshine/parser"
+	. "github.com/RandomLemon/moonshine/scanner"
+	. "github.com/RandomLemon/moonshine/parser"
 	"github.com/google/syzkaller/prog"
 	"github.com/google/syzkaller/pkg/hash"
 	"fmt"
@@ -14,13 +14,13 @@ import (
 	"strings"
 	"strconv"
 	"flag"
-	"github.com/shankarapailoor/moonshine/strace_types"
-	. "github.com/shankarapailoor/moonshine/logging"
+	"github.com/RandomLemon/moonshine/strace_types"
+	. "github.com/RandomLemon/moonshine/logging"
 	"github.com/google/syzkaller/sys"
 	"path"
-	"github.com/shankarapailoor/moonshine/tracker"
-	"github.com/shankarapailoor/moonshine/distiller"
-	"github.com/shankarapailoor/moonshine/configs"
+	"github.com/RandomLemon/moonshine/tracker"
+	"github.com/RandomLemon/moonshine/distiller"
+	"github.com/RandomLemon/moonshine/configs"
 )
 
 var (

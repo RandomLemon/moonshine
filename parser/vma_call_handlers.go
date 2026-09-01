@@ -3,8 +3,8 @@ package parser
 import (
 	//"fmt"
 	"github.com/google/syzkaller/prog"
-	"github.com/shankarapailoor/moonshine/strace_types"
-	"github.com/shankarapailoor/moonshine/tracker"
+	"github.com/RandomLemon/moonshine/strace_types"
+	"github.com/RandomLemon/moonshine/tracker"
 )
 
 const (

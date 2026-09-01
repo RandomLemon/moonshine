@@ -1,7 +1,7 @@
 package parser
 
 import (
-	"github.com/shankarapailoor/moonshine/strace_types"
+	"github.com/RandomLemon/moonshine/strace_types"
 	"github.com/google/syzkaller/prog"
 )
 

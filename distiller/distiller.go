@@ -2,8 +2,8 @@ package distiller
 
 import (
 	"github.com/google/syzkaller/prog"
-	"github.com/RandomLemon/moonshine/configs"
-	"github.com/RandomLemon/moonshine/implicit-dependencies"
+	"github.com/shankarapailoor/moonshine/configs"
+	"github.com/shankarapailoor/moonshine/implicit-dependencies"
 )
 
 type Distiller interface {

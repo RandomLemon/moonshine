@@ -1,10 +1,11 @@
 package distiller
 
 import (
-	"github.com/google/syzkaller/prog"
-	"sort"
 	"fmt"
+	"github.com/google/syzkaller/prog"
+	"github.com/shankarapailoor/moonshine/tracker"
 	"os"
+	"sort"
 )
 
 type TraceDistiller struct {
@@ -14,7 +15,7 @@ type TraceDistiller struct {
 type Traces []*Trace
 
 type Trace struct {
-	Prog *prog.Prog
+	Prog  *prog.Prog
 	Cover []uint64
 }
 
@@ -33,8 +34,6 @@ func (t Traces) Less(i, j int) bool {
 func (t *Traces) Add(trace *Trace) {
 	*t = append(*t, trace)
 }
-
-
 
 func (d *TraceDistiller) traces(progs []*prog.Prog) Traces {
 	traces := make(Traces, 0)
@@ -72,7 +71,7 @@ func (d *TraceDistiller) Add(seeds Seeds) {
 		d.CallToSeed[seed.Call] = seed
 		d.UpstreamDependencyGraph[seed] = make(map[int]map[prog.Arg][]prog.Arg, 0)
 		seed.ArgMeta = make(map[prog.Arg]bool, 0)
-		for call,idx := range seed.DependsOn {
+		for call, idx := range seed.DependsOn {
 			if _, ok := d.UpstreamDependencyGraph[seed][idx]; !ok {
 				d.UpstreamDependencyGraph[seed][idx] = make(map[prog.Arg][]prog.Arg, 0)
 			}
@@ -99,11 +98,13 @@ func (d *TraceDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog) {
 			fmt.Printf("Error: %s\n", err.Error())
 			continue
 		}
+		// The old distiller rewrote the (now unexported) ResultArg uses set to drop
+		// references to calls that are not part of this distilled program.
+		tracker.RelinkDependencies(prog_)
 		totalMemoryAllocations := d.CallToSeed[prog_.Calls[0]].State.Tracker.GetTotalMemoryAllocations(prog_)
 		state := d.CallToSeed[prog_.Calls[0]].State
-		mmapCall := state.Target.MakeMmap(0, uint64(totalMemoryAllocations/pageSize)+1)
 		calls := make([]*prog.Call, 0)
-		calls = append(append(calls, mmapCall), prog_.Calls...)
+		calls = append(append(calls, tracker.MakeMmap(state.Target, 0, uint64(totalMemoryAllocations))), prog_.Calls...)
 
 		prog_.Calls = calls
 		distilled = append(distilled, prog_)

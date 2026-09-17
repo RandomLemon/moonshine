@@ -1,15 +1,15 @@
 package implicit_dependencies
 
 import (
-	"io/ioutil"
-	. "github.com/RandomLemon/moonshine/logging"
 	"encoding/json"
+	. "github.com/shankarapailoor/moonshine/logging"
+	"os"
 )
 
 type ImplicitDependencies map[string][]string
 
 func LoadImplicitDependencies(location string) (impl_deps *ImplicitDependencies) {
-	json_data, e := ioutil.ReadFile(location)
+	json_data, e := os.ReadFile(location)
 	if e != nil {
 		Failf("Unable to read %s", location)
 	}

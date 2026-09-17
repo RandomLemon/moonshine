@@ -1,11 +1,12 @@
 package distiller
 
 import (
+	"fmt"
 	"github.com/google/syzkaller/pkg/log"
 	"github.com/google/syzkaller/prog"
-	"fmt"
-	"sort"
+	"github.com/shankarapailoor/moonshine/tracker"
 	"os"
+	"sort"
 )
 
 func (d *ExplicitDistiller) Add(seeds Seeds) {
@@ -20,12 +21,12 @@ func (d *ExplicitDistiller) Add(seeds Seeds) {
 				/* Loop over upstream, dependent calls within seed.Prog.
 				Dependent call c is the idx'th call in seed.Prog.
 				Set d.UpstreamDependencyGraph[idx] = { Arg --> [Args] }
-				 */
+				*/
 				d.UpstreamDependencyGraph[seed][idx] = make(map[prog.Arg][]prog.Arg, 0)
 			}
-			d.CallToIdx[call] = idx  // track position of dependent calls
+			d.CallToIdx[call] = idx // track position of dependent calls
 		}
-		d.CallToIdx[seed.Call] = seed.CallIdx  // track position of seed call
+		d.CallToIdx[seed.Call] = seed.CallIdx // track position of seed call
 	}
 }
 
@@ -34,8 +35,8 @@ func (d *ExplicitDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog)
 	seeds := d.Seeds
 	fmt.Printf("Computing Min Cover with %d seeds\n", len(seeds))
 	sort.Sort(sort.Reverse(seeds))
-	contributing_seeds := 0  /* how many seeds contribute new coverage */
-	heavyHitters := make(Seeds, 0)  /* all seeds that contribute new coverage */
+	contributing_seeds := 0        /* how many seeds contribute new coverage */
+	heavyHitters := make(Seeds, 0) /* all seeds that contribute new coverage */
 	var target *prog.Target = nil
 
 	for _, prog := range progs {
@@ -45,7 +46,7 @@ func (d *ExplicitDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog)
 		d.TrackDependencies(prog)
 	}
 	for _, seed := range seeds {
-		var ips int = d.Contributes(seed, seenIps)  /* how many unique Ips does seed contribute */
+		var ips int = d.Contributes(seed, seenIps) /* how many unique Ips does seed contribute */
 		if ips > 0 {
 			heavyHitters.Add(seed)
 			contributing_seeds += 1
@@ -79,13 +80,15 @@ func (d *ExplicitDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog)
 			//fmt.Printf("Error: %s\n", err.Error())
 			continue
 		}
+		// The old distiller rewrote the (now unexported) ResultArg uses set to drop
+		// references to calls that are not part of this distilled program.
+		tracker.RelinkDependencies(prog_)
 
 		totalMemoryAllocations := newMemoryTracker.GetTotalMemoryAllocations(prog_)
 		calls := make([]*prog.Call, 0)
 		state := d.CallToSeed[prog_.Calls[0]].State
 		if totalMemoryAllocations > 0 {
-			mmapCall := state.Target.MakeMmap(0, uint64(totalMemoryAllocations))
-			calls = append(calls, mmapCall)
+			calls = append(calls, tracker.MakeMmap(state.Target, 0, uint64(totalMemoryAllocations)))
 		}
 
 		calls = append(calls, prog_.Calls...)
@@ -97,10 +100,9 @@ func (d *ExplicitDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog)
 	fmt.Printf("hevyHitters: %d\n", len(heavyHitters))
 	d.Stats(heavyHitters)
 	fmt.Fprintf(os.Stderr, "Total Contributing seeds: %d out of %d, in %d strong-distilled programs\n",
-		   contributing_seeds, len(seeds), len(distilled))
+		contributing_seeds, len(seeds), len(distilled))
 	return
 }
-
 
 func (d *ExplicitDistiller) AddToDistilledProg(seed *Seed) {
 	distilledProg := new(prog.Prog)
@@ -109,7 +111,7 @@ func (d *ExplicitDistiller) AddToDistilledProg(seed *Seed) {
 	totalCalls := make([]*prog.Call, 0)
 
 	if d.CallToDistilledProg[seed.Call] != nil {
-		return  /* skip call if already in a distilled program */
+		return /* skip call if already in a distilled program */
 	}
 	seenMap := make(map[int]bool, 0)
 	upstreamCalls := make([]*prog.Call, 0)
@@ -117,18 +119,18 @@ func (d *ExplicitDistiller) AddToDistilledProg(seed *Seed) {
 	upstreamCalls = append(upstreamCalls, d.GetAllUpstreamDependents(seed, seenMap)...)
 	upstreamCalls = append(upstreamCalls, seed.Call) // add seed as last call
 	distinctProgs := d.getAllProgs(upstreamCalls)
-	if len(distinctProgs) > 0 {  // we need to merge!
+	if len(distinctProgs) > 0 { // we need to merge!
 		// collect all the calls from all distinct progs, plus our upstreamCalls together
 		totalCalls = append(d.getCalls(distinctProgs), upstreamCalls...)
 	} else {
 		totalCalls = upstreamCalls
 	}
 
-	callIndexes = d.uniqueCallIdxs(totalCalls)  // dedups and sorts calls by their program idx
+	callIndexes = d.uniqueCallIdxs(totalCalls) // dedups and sorts calls by their program idx
 	for _, idx := range callIndexes {
 		call := seed.Prog.Calls[idx]
-		d.CallToDistilledProg[call] = distilledProg  // set calls to point to new, merged program
+		d.CallToDistilledProg[call] = distilledProg // set calls to point to new, merged program
 		distilledProg.Calls = append(distilledProg.Calls, call)
 	}
-	d.BuildDependency(seed, distilledProg)  // set args to point to dependent args.
+	d.BuildDependency(seed, distilledProg) // set args to point to dependent args.
 }

@@ -11,42 +11,42 @@ const (
 )
 
 type State struct {
-	Target    *Target
-	Files     map[string][]*Call
-	Resources map[string][]Arg
-	Strings   map[string]*Call
-	Pages     [maxPages]bool
-	Pages_    [maxPages]int
-	Tracker	  *MemoryTracker
+	Target      *Target
+	Files       map[string][]*Call
+	Resources   map[string][]Arg
+	Strings     map[string]*Call
+	Pages       [maxPages]bool
+	Pages_      [maxPages]int
+	Tracker     *MemoryTracker
 	CurrentCall *Call
 }
 
-
 func NewState(target *Target) *State {
 	s := &State{
-		Target:    target,
-		Files:     make(map[string][]*Call),
-		Resources: make(map[string][]Arg),
-		Strings:   make(map[string]*Call),
-		Tracker:   NewTracker(),
+		Target:      target,
+		Files:       make(map[string][]*Call),
+		Resources:   make(map[string][]Arg),
+		Strings:     make(map[string]*Call),
+		Tracker:     NewTracker(),
 		CurrentCall: nil,
 	}
 	return s
 }
-
 
 func (s *State) Analyze(c *Call) {
 	ForeachArg(c, func(arg Arg, _ *ArgCtx) {
 		switch typ := arg.Type().(type) {
 		case *ResourceType:
 			a := arg.(*ResultArg)
-			if typ.Dir() != DirIn {
+			// The 2018 API kept the direction on the type (TypeCommon.ArgDir);
+			// modern prog stores it on the arg, threaded from the field dir.
+			if a.Dir() != DirIn {
 				s.Resources[typ.Desc.Name] = append(s.Resources[typ.Desc.Name], a)
 				// TODO: negative PIDs and add them as well (that's process groups).
 			}
 		case *BufferType:
 			a := arg.(*DataArg)
-			if typ.Dir() != DirOut && len(a.Data()) != 0 {
+			if a.Dir() != DirOut && len(a.Data()) != 0 {
 				val := string(a.Data())
 				// Remove trailing zero padding.
 				for len(val) >= 2 && val[len(val)-1] == 0 && val[len(val)-2] == 0 {
@@ -61,9 +61,9 @@ func (s *State) Analyze(c *Call) {
 						return
 					}
 					/*
-					if val[len(val)-1] == 0 {
-						val = val[:len(val)-1]
-					}*/
+						if val[len(val)-1] == 0 {
+							val = val[:len(val)-1]
+						}*/
 					if s.Files[val] == nil {
 						s.Files[val] = make([]*Call, 0)
 					}

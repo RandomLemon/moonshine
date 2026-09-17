@@ -2,11 +2,10 @@ package distiller
 
 import (
 	"fmt"
+	"github.com/google/syzkaller/prog"
+	"github.com/shankarapailoor/moonshine/tracker"
 	"os"
 	"sort"
-
-	"github.com/google/syzkaller/prog"
-	"github.com/RandomLemon/moonshine/tracker"
 )
 
 type DistillerMetadata struct {
@@ -109,7 +108,6 @@ func (d *DistillerMetadata) TrackDependencies(prg *prog.Prog) {
 		}
 		if call.Ret != nil {
 			args[call.Ret] = i
-			call.Ret.Set(nil)
 		}
 	}
 }
@@ -121,21 +119,8 @@ func (d *DistillerMetadata) BuildDependency(seed *Seed, distilledProg *prog.Prog
 			dependencyMap := d.UpstreamDependencyGraph[s]
 			for idx, argMap := range dependencyMap {
 				upstreamSeed := d.CallToSeed[seed.Prog.Calls[idx]]
-				for argK, argVs := range argMap {
-					//fmt.Printf("dealing with argMap\n")
-					for _, argV := range argVs {
-						if _, ok := upstreamSeed.ArgMeta[argK]; !ok {
-							//fmt.Printf("UpstreamedSeed: %s, for call: %s index: %d\n", upstreamSeed.Call.Meta.CallName, seed.Call.Meta.CallName, idx)
-							argK.(*prog.ResultArg).Set(nil)
-							upstreamSeed.ArgMeta[argK] = true
-						}
-						if (argK.(*prog.ResultArg).Uses()) == nil {
-							//fmt.Printf("Allocating Uses: %s, index: %d\n", upstreamSeed.Call.Meta.CallName, idx)
-							argK.(*prog.ResultArg).Set(make(map[*prog.ResultArg]bool, 0))
-						}
-						//fmt.Printf("Setting ArgV: %s, %d\n", upstreamSeed.Call.Meta.CallName, idx)
-						argK.(*prog.ResultArg).Uses()[argV.(*prog.ResultArg)] = true
-					}
+				for argK := range argMap {
+					upstreamSeed.ArgMeta[argK] = true
 				}
 			}
 		}
@@ -267,20 +252,16 @@ func (d *DistillerMetadata) isDependent(arg prog.Arg, seed *Seed, state *tracker
 		}
 
 	case *prog.DataArg:
-		switch typ := arg.Type().(type) {
-		case *prog.BufferType:
-			if typ.ArgDir != prog.DirOut && len(a.Data()) != 0 {
-				switch typ.Kind {
-				case prog.BufferFilename:
-					callMap := make(map[*prog.Call]bool, 0)
-					for s, calls := range state.Files {
-						if s == string(a.Data()) {
-							for _, call := range calls {
-								if _, ok := callMap[call]; !ok {
-									if d.CallToIdx[call] < seed.CallIdx {
-										d.UpstreamDependencyGraph[seed][d.CallToIdx[call]] = make(map[prog.Arg][]prog.Arg, 0)
-										callMap[call] = true
-									}
+		if a.Dir() != prog.DirOut && len(a.Data()) != 0 {
+			if typ, ok := arg.Type().(*prog.BufferType); ok && typ.Kind == prog.BufferFilename {
+				callMap := make(map[*prog.Call]bool, 0)
+				for s, calls := range state.Files {
+					if s == string(a.Data()) {
+						for _, call := range calls {
+							if _, ok := callMap[call]; !ok {
+								if d.CallToIdx[call] < seed.CallIdx {
+									d.UpstreamDependencyGraph[seed][d.CallToIdx[call]] = make(map[prog.Arg][]prog.Arg, 0)
+									callMap[call] = true
 								}
 							}
 						}
@@ -290,9 +271,6 @@ func (d *DistillerMetadata) isDependent(arg prog.Arg, seed *Seed, state *tracker
 		}
 	}
 	args[arg] = callIdx // this arg is used in the call at position callIdx in prog
-	if _, ok := arg.(*prog.ResultArg); ok {
-		arg.(*prog.ResultArg).Set(nil)
-	}
 	//doesn't hurt to add again if it was already added
 	return upstreamSet
 }

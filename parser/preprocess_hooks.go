@@ -1,9 +1,9 @@
 package parser
 
 import (
-	"github.com/RandomLemon/moonshine/strace_types"
 	"github.com/google/syzkaller/prog"
-	. "github.com/RandomLemon/moonshine/logging"
+	. "github.com/shankarapailoor/moonshine/logging"
+	"github.com/shankarapailoor/moonshine/strace_types"
 )
 
 type PreprocessHook func(ctx *Context)
@@ -16,51 +16,50 @@ func Preprocess(ctx *Context) {
 	return
 }
 
-var PreprocessMap = map[string]PreprocessHook {
-	"bpf": Preprocess_Bpf,
-	"accept": Preprocess_Accept,
-	"accept4": Preprocess_Accept,
-	"bind": Preprocess_Bind,
-	"connect": Preprocess_Connect,
-	"fcntl": Preprocess_Fcntl,
+var PreprocessMap = map[string]PreprocessHook{
+	"bpf":         Preprocess_Bpf,
+	"accept":      Preprocess_Accept,
+	"accept4":     Preprocess_Accept,
+	"bind":        Preprocess_Bind,
+	"connect":     Preprocess_Connect,
+	"fcntl":       Preprocess_Fcntl,
 	"getsockname": Preprocess_Getsockname,
-	"getsockopt": Preprocess_Getsockopt,
-	"ioctl": Preprocess_Ioctl,
-	"open": Preprocess_Open,
-	"prctl": Preprocess_Prctl,
-	"recvfrom": Preprocess_Recvfrom,
-	"mknod": Preprocess_Mknod,
-	"modify_ldt": Preprocess_ModifyLdt,
-	"openat": Preprocess_Openat,
-	"sendto": Preprocess_Sendto,
-	"setsockopt": Preprocess_Setsockopt,
-	"shmctl": Preprocess_Shmctl,
-	"socket": Preprocess_Socket,
+	"getsockopt":  Preprocess_Getsockopt,
+	"ioctl":       Preprocess_Ioctl,
+	"open":        Preprocess_Open,
+	"prctl":       Preprocess_Prctl,
+	"recvfrom":    Preprocess_Recvfrom,
+	"mknod":       Preprocess_Mknod,
+	"modify_ldt":  Preprocess_ModifyLdt,
+	"openat":      Preprocess_Openat,
+	"sendto":      Preprocess_Sendto,
+	"setsockopt":  Preprocess_Setsockopt,
+	"shmctl":      Preprocess_Shmctl,
+	"socket":      Preprocess_Socket,
 }
-
 
 func Preprocess_Bpf(ctx *Context) {
 	bpfCmd := ctx.CurrentStraceCall.Args[0].String()
 	if suffix, ok := strace_types.Bpf_labels[bpfCmd]; ok {
 		ctx.CurrentStraceCall.CallName += suffix
-	} else if _, ok := ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName + "$" + bpfCmd]; ok {
-		ctx.CurrentStraceCall.CallName += "$"+bpfCmd
+	} else if _, ok := ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName+"$"+bpfCmd]; ok {
+		ctx.CurrentStraceCall.CallName += "$" + bpfCmd
 	}
 	ctx.CurrentSyzCall.Meta = ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName]
 }
 
 func Preprocess_Accept(ctx *Context) {
 	/*
-	Accept can take on many subforms such as
-	accept$inet
-	accept$inet6
+		Accept can take on many subforms such as
+		accept$inet
+		accept$inet6
 
-	In order to determine the proper form we need to look at the file descriptor to determine
-	the proper socket type. We refer to the $inet as a suffix to the name
-	 */
+		In order to determine the proper form we need to look at the file descriptor to determine
+		the proper socket type. We refer to the $inet as a suffix to the name
+	*/
 	suffix := ""
 	straceFd := ctx.CurrentStraceCall.Args[0] //File descriptor of Accept
-	syzFd := ctx.CurrentSyzCall.Meta.Args[0]
+	syzFd := ctx.CurrentSyzCall.Meta.Args[0].Type
 	if arg := ctx.Cache.Get(syzFd, straceFd); arg != nil {
 		switch a := arg.Type().(type) {
 		case *prog.ResourceType:
@@ -75,7 +74,7 @@ func Preprocess_Accept(ctx *Context) {
 func Preprocess_Bind(ctx *Context) {
 	suffix := ""
 	straceFd := ctx.CurrentStraceCall.Args[0]
-	syzFd := ctx.CurrentSyzCall.Meta.Args[0]
+	syzFd := ctx.CurrentSyzCall.Meta.Args[0].Type
 	if arg := ctx.Cache.Get(syzFd, straceFd); arg != nil {
 		switch a := arg.Type().(type) {
 		case *prog.ResourceType:
@@ -90,7 +89,7 @@ func Preprocess_Bind(ctx *Context) {
 func Preprocess_Connect(ctx *Context) {
 	suffix := ""
 	straceFd := ctx.CurrentStraceCall.Args[0]
-	syzFd := ctx.CurrentSyzCall.Meta.Args[0]
+	syzFd := ctx.CurrentSyzCall.Meta.Args[0].Type
 	if arg := ctx.Cache.Get(syzFd, straceFd); arg != nil {
 		switch a := arg.Type().(type) {
 		case *prog.ResourceType:
@@ -105,7 +104,7 @@ func Preprocess_Connect(ctx *Context) {
 func Preprocess_Getsockname(ctx *Context) {
 	suffix := ""
 	straceFd := ctx.CurrentStraceCall.Args[0]
-	syzFd := ctx.CurrentSyzCall.Meta.Args[0]
+	syzFd := ctx.CurrentSyzCall.Meta.Args[0].Type
 	if arg := ctx.Cache.Get(syzFd, straceFd); arg != nil {
 		switch a := arg.Type().(type) {
 		case *prog.ResourceType:
@@ -129,7 +128,7 @@ func Preprocess_Socket(ctx *Context) {
 func Preprocess_Setsockopt(ctx *Context) {
 	sockLevel := ctx.CurrentStraceCall.Args[1]
 	optName := ctx.CurrentStraceCall.Args[2]
-	pair := strace_types.Pair {
+	pair := strace_types.Pair{
 		A: sockLevel.String(),
 		B: optName.String(),
 	}
@@ -143,7 +142,7 @@ func Preprocess_Setsockopt(ctx *Context) {
 func Preprocess_Getsockopt(ctx *Context) {
 	sockLevel := ctx.CurrentStraceCall.Args[1]
 	optName := ctx.CurrentStraceCall.Args[2]
-	pair := strace_types.Pair {
+	pair := strace_types.Pair{
 		A: sockLevel.String(),
 		B: optName.String(),
 	}
@@ -154,12 +153,10 @@ func Preprocess_Getsockopt(ctx *Context) {
 
 }
 
-
-
 func Preprocess_Recvfrom(ctx *Context) {
 	suffix := ""
 	straceFd := ctx.CurrentStraceCall.Args[0]
-	syzFd := ctx.CurrentSyzCall.Meta.Args[0]
+	syzFd := ctx.CurrentSyzCall.Meta.Args[0].Type
 	if arg := ctx.Cache.Get(syzFd, straceFd); arg != nil {
 		switch a := arg.Type().(type) {
 		case *prog.ResourceType:
@@ -170,8 +167,6 @@ func Preprocess_Recvfrom(ctx *Context) {
 		}
 	}
 }
-
-
 
 func Preprocess_Open(ctx *Context) {
 	if len(ctx.CurrentStraceCall.Args) < 3 {
@@ -198,8 +193,8 @@ func Preprocess_Ioctl(ctx *Context) {
 	ioctlCmd := ctx.CurrentStraceCall.Args[1].String()
 	if suffix, ok := strace_types.Ioctl_map[ioctlCmd]; ok {
 		ctx.CurrentStraceCall.CallName += suffix
-	} else if _, ok := ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName + "$" + ioctlCmd]; ok {
-		ctx.CurrentStraceCall.CallName += "$"+ioctlCmd
+	} else if _, ok := ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName+"$"+ioctlCmd]; ok {
+		ctx.CurrentStraceCall.CallName += "$" + ioctlCmd
 	}
 	ctx.CurrentSyzCall.Meta = ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName]
 }
@@ -208,24 +203,24 @@ func Preprocess_Fcntl(ctx *Context) {
 	fcntlCmd := ctx.CurrentStraceCall.Args[1].String()
 	if suffix, ok := strace_types.Fcntl_labels[fcntlCmd]; ok {
 		ctx.CurrentStraceCall.CallName += suffix
-	} else if _, ok := ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName + "$" + fcntlCmd]; ok {
-		ctx.CurrentStraceCall.CallName += "$"+fcntlCmd
+	} else if _, ok := ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName+"$"+fcntlCmd]; ok {
+		ctx.CurrentStraceCall.CallName += "$" + fcntlCmd
 	}
 	ctx.CurrentSyzCall.Meta = ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName]
 }
 
 func Preprocess_Prctl(ctx *Context) {
 	prctlCmd := ctx.CurrentStraceCall.Args[0].String()
-	if _, ok := ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName + "$" + prctlCmd]; ok {
-		ctx.CurrentStraceCall.CallName += "$"+prctlCmd
+	if _, ok := ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName+"$"+prctlCmd]; ok {
+		ctx.CurrentStraceCall.CallName += "$" + prctlCmd
 	}
 	ctx.CurrentSyzCall.Meta = ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName]
 }
 
 func Preprocess_Shmctl(ctx *Context) {
 	shmctlCmd := ctx.CurrentStraceCall.Args[1].String()
-	if _, ok := ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName + "$" + shmctlCmd]; ok {
-		ctx.CurrentStraceCall.CallName += "$"+shmctlCmd
+	if _, ok := ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName+"$"+shmctlCmd]; ok {
+		ctx.CurrentStraceCall.CallName += "$" + shmctlCmd
 	}
 	ctx.CurrentSyzCall.Meta = ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName]
 }
@@ -233,7 +228,7 @@ func Preprocess_Shmctl(ctx *Context) {
 func Preprocess_Sendto(ctx *Context) {
 	suffix := ""
 	straceFd := ctx.CurrentStraceCall.Args[0] //File descriptor of Accept
-	syzFd := ctx.CurrentSyzCall.Meta.Args[0]
+	syzFd := ctx.CurrentSyzCall.Meta.Args[0].Type
 	if arg := ctx.Cache.Get(syzFd, straceFd); arg != nil {
 		switch a := arg.Type().(type) {
 		case *prog.ResourceType:

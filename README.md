@@ -1,3 +1,28 @@
+> **Migrated to modern Go (2026).** This copy lives at `moonshine/` in the
+> TensorFunnel repo and builds against the modern syzkaller at `../syzkaller`
+> (Go 1.26, module mode) instead of its old `vendor/` tree. That vendor tree
+> carried fork-only patches to syzkaller internals (`ResultArg.Set`/`Uses`,
+> `Prog.StripDependencies`), which `tracker/relink.go` now reimplements against
+> the public API. The GOPATH instructions below are kept for upstream reference
+> and no longer apply; use:
+>
+> ```bash
+> cd moonshine
+> make            # go build -o ./bin/moonshine .
+> ./bin/moonshine -file ../data/tf4.trace
+> ```
+>
+> The syzkaller dependency is wired by a relative `replace` in `go.mod`, so the
+> module resolves from any checkout location. `make generate` regenerates the
+> ragel/goyacc scanners; they are checked in because they carry this fork's kcov
+> `"Cover:"` line handling.
+>
+> NOTE: on traces containing the CUDA `PROT_NONE` reservations and absolute
+> library paths this tool still emits an empty corpus, exactly as the pristine
+> 2018 binary does. Those are pre-existing design limits of moonshine
+> (`memAllocMaxMem`, the 16 MiB data region, absent absolute-path filtering),
+> not artifacts of the migration.
+
 # MoonShine: Seed Selection for OS Fuzzers (USENIX '18)
 
 MoonShine selects compact and diverse seeds for OS fuzzers from system call traces of real world programs. Please see our USENIX'18 paper [MoonShine: Optimizing OS Fuzzer Seed Selection with Trace Distillation](http://www.cs.columbia.edu/~suman/docs/moonshine.pdf) for more details. Currently, MoonShine can only generate seeds for Syzkaller on Linux. 
@@ -52,8 +77,8 @@ $ export PATH=$PATH:$HOME/go/bin
 
 ### Build
 ```bash
-go get -u -d github.com/RandomLemon/moonshine/...
-cd $GOPATH/src/github.com/RandomLemon/moonshine
+go get -u -d github.com/shankarapailoor/moonshine/...
+cd $GOPATH/src/github.com/shankarapailoor/moonshine
 make
 ```
 
@@ -104,7 +129,7 @@ MoonShine needs to know the coverage achieved by each call in a trace in order t
 $ cd ~
 $ git clone https://github.com/strace/strace strace
 $ git checkout a8d2417e97e71ae01095bee1a1e563b07f2d6b41
-$ git apply $GOPATH/src/github.com/RandomLemon/moonshine/strace_kcov.patch
+$ git apply $GOPATH/src/github.com/shankarapailoor/moonshine/strace_kcov.patch
 $ ./bootstrap
 ...
 $ ./configure

@@ -2,15 +2,15 @@ package distiller
 
 import (
 	"fmt"
+	"github.com/google/syzkaller/pkg/log"
+	"github.com/google/syzkaller/prog"
+	"github.com/shankarapailoor/moonshine/implicit-dependencies"
+	"github.com/shankarapailoor/moonshine/tracker"
 	"math/rand"
 	"os"
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/google/syzkaller/pkg/log"
-	"github.com/google/syzkaller/prog"
-	"github.com/RandomLemon/moonshine/implicit-dependencies"
 )
 
 type ImplicitDistiller struct {
@@ -95,12 +95,14 @@ func (d *ImplicitDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog)
 			log.Logf(4, "Error filling out memory in distilled prog: %s", err)
 			continue
 		}
+		// The old distiller rewrote the (now unexported) ResultArg uses set to drop
+		// references to calls that are not part of this distilled program.
+		tracker.RelinkDependencies(prog_)
 		totalMemoryAllocations := newMemoryTracker.GetTotalMemoryAllocations(prog_)
 		calls := make([]*prog.Call, 0)
 		state := d.CallToSeed[prog_.Calls[0]].State
 		if totalMemoryAllocations > 0 {
-			mmapCall := state.Target.MakeMmap(0, uint64(totalMemoryAllocations))
-			calls = append(calls, mmapCall)
+			calls = append(calls, tracker.MakeMmap(state.Target, 0, uint64(totalMemoryAllocations)))
 		}
 
 		calls = append(calls, prog_.Calls...)

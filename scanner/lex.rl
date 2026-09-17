@@ -5,7 +5,7 @@ import (
     "encoding/hex"
     "strconv"
     "strings"
-    "github.com/RandomLemon/moonshine/strace_types"
+    "github.com/shankarapailoor/moonshine/strace_types"
 )
 
 %%{

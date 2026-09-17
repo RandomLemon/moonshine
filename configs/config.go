@@ -2,9 +2,8 @@ package config
 
 import (
 	"encoding/json"
-	"io/ioutil"
-
-	. "github.com/RandomLemon/moonshine/logging"
+	. "github.com/shankarapailoor/moonshine/logging"
+	"os"
 )
 
 type SyzStraceConfig struct {
@@ -51,7 +50,7 @@ type GceConfig struct {
 }
 
 func NewConfig(location string) (config *SyzStraceConfig) {
-	dat, fileErr := ioutil.ReadFile(location)
+	dat, fileErr := os.ReadFile(location)
 	if fileErr != nil {
 		Failf("Unable to read config, exiting")
 	}
@@ -62,7 +61,7 @@ func NewConfig(location string) (config *SyzStraceConfig) {
 }
 
 func NewDistillConfig(location string) (config *DistillConfig) {
-	dat, fileErr := ioutil.ReadFile(location)
+	dat, fileErr := os.ReadFile(location)
 	if fileErr != nil {
 		Failf("Unable to read distill config, exiting")
 

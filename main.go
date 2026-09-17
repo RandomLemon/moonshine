@@ -1,43 +1,41 @@
 package main
 
 import (
-	"github.com/google/syzkaller/pkg/log"
-	. "github.com/RandomLemon/moonshine/scanner"
-	. "github.com/RandomLemon/moonshine/parser"
-	"github.com/google/syzkaller/prog"
-	"github.com/google/syzkaller/pkg/hash"
-	"fmt"
-	"os"
-	"github.com/google/syzkaller/pkg/db"
-	"io/ioutil"
-	"path/filepath"
-	"strings"
-	"strconv"
 	"flag"
-	"github.com/RandomLemon/moonshine/strace_types"
-	. "github.com/RandomLemon/moonshine/logging"
-	"github.com/google/syzkaller/sys"
+	"fmt"
+	"github.com/google/syzkaller/pkg/db"
+	"github.com/google/syzkaller/pkg/hash"
+	"github.com/google/syzkaller/pkg/log"
+	"github.com/google/syzkaller/prog"
+	_ "github.com/google/syzkaller/sys"
+	"github.com/shankarapailoor/moonshine/configs"
+	"github.com/shankarapailoor/moonshine/distiller"
+	. "github.com/shankarapailoor/moonshine/logging"
+	. "github.com/shankarapailoor/moonshine/parser"
+	. "github.com/shankarapailoor/moonshine/scanner"
+	"github.com/shankarapailoor/moonshine/strace_types"
+	"github.com/shankarapailoor/moonshine/tracker"
+	"os"
 	"path"
-	"github.com/RandomLemon/moonshine/tracker"
-	"github.com/RandomLemon/moonshine/distiller"
-	"github.com/RandomLemon/moonshine/configs"
+	"path/filepath"
+	"strconv"
+	"strings"
 )
 
 var (
-	flagFile = flag.String("file", "", "file to parse")
-	flagDir = flag.String("dir", "", "director to parse")
+	flagFile    = flag.String("file", "", "file to parse")
+	flagDir     = flag.String("dir", "", "director to parse")
 	flagDistill = flag.String("distill", "", "Path to distillation config")
 )
 
 const (
-	OS = "linux"
-	Arch = "amd64"
+	OS               = "linux"
+	Arch             = "amd64"
 	currentDBVersion = 3
-
 )
 
 func main() {
-	rev := sys.GitRevision
+	rev := prog.GitRevision
 	flag.Parse()
 	target, err := prog.GetTarget(OS, Arch)
 	if err != nil {
@@ -49,8 +47,9 @@ func main() {
 }
 
 func progIsTooLarge(prog_ *prog.Prog) bool {
-	buff := make([]byte, prog.ExecBufferSize)
-	if _, err := prog_.SerializeForExec(buff); err != nil {
+	// SerializeForExec no longer takes a caller-provided buffer: it allocates
+	// its own and enforces prog.ExecBufferSize internally.
+	if _, err := prog_.SerializeForExec(); err != nil {
 		return true
 	}
 	return false
@@ -74,7 +73,7 @@ func ParseTraces(target *prog.Target) []*Context {
 	seeds := make(distiller.Seeds, 0)
 	totalFiles := len(names)
 	fmt.Printf("Total Number of Files: %d\n", totalFiles)
-	for i, file := range(names) {
+	for i, file := range names {
 		fmt.Printf("Parsing File %d/%d: %s\n", i+1, totalFiles, path.Base(names[i]))
 		tree := Parse(file)
 		if tree == nil {
@@ -82,7 +81,7 @@ func ParseTraces(target *prog.Target) []*Context {
 			continue
 		}
 		ctxs := ParseTree(tree, tree.RootPid, target)
-		log.Logf(2, "Context size: ", len(ctxs))
+		log.Logf(2, "Context size: %d", len(ctxs))
 		ret = append(ret, ctxs...)
 		i := 0
 		for _, ctx := range ctxs {
@@ -93,12 +92,12 @@ func ParseTraces(target *prog.Target) []*Context {
 					continue
 				}
 				if progIsTooLarge(ctx.Prog) {
-					fmt.Fprintln(os.Stderr, "Prog is too large\n")
+					fmt.Fprintln(os.Stderr, "Prog is too large")
 					continue
 				}
 				i += 1
 				s_name := "deserialized/" + filepath.Base(file) + strconv.Itoa(i)
-				if err := ioutil.WriteFile(s_name, ctx.Prog.Serialize(), 0640); err != nil {
+				if err := os.WriteFile(s_name, ctx.Prog.Serialize(), 0640); err != nil {
 					Failf("failed to output file: %v", err)
 				}
 			} else {
@@ -115,17 +114,17 @@ func ParseTraces(target *prog.Target) []*Context {
 		distler := distiller.NewDistiller(config.NewDistillConfig(*flagDistill))
 		distler.Add(seeds)
 		distilledProgs := distler.Distill(GetProgs(ret))
-		log.Logf(2, "Distilled Progs: ", len(distilledProgs))
+		log.Logf(2, "Distilled Progs: %d", len(distilledProgs))
 		for i, prog_ := range distilledProgs {
 			if progIsTooLarge(prog_) {
 				fmt.Fprintln(os.Stderr, "Prog is too large")
 				continue
 			}
-			if err := prog_.Validate(); err != nil {
+			if err := ValidateProg(prog_.Target, prog_); err != nil {
 				panic(fmt.Sprintf("Error validating program: %s\n", err.Error()))
 			}
 			s_name := "deserialized/" + "distill" + strconv.Itoa(i)
-			if err := ioutil.WriteFile(s_name, prog_.Serialize(), 0640); err != nil {
+			if err := os.WriteFile(s_name, prog_.Serialize(), 0640); err != nil {
 				Failf("failed to output file: %v", err)
 			}
 		}
@@ -133,12 +132,10 @@ func ParseTraces(target *prog.Target) []*Context {
 	return ret
 }
 
-
-
 func getFileNames(dir string) []string {
 	names := make([]string, 0)
-	if infos, err := ioutil.ReadDir(dir); err == nil {
-		for _, info := range (infos) {
+	if infos, err := os.ReadDir(dir); err == nil {
+		for _, info := range infos {
 			name := path.Join(dir, info.Name())
 			names = append(names, name)
 		}
@@ -164,49 +161,47 @@ func ParseTree(tree *strace_types.TraceTree, pid int64, target *prog.Target) []*
 		ctx.Prog = parsedProg
 		ctxs = append(ctxs, ctx)
 	}
-	for _, pid_ := range(tree.Ptree[pid]) {
-		if tree.TraceMap[pid_] != nil{
+	for _, pid_ := range tree.Ptree[pid] {
+		if tree.TraceMap[pid_] != nil {
 			ctxs = append(ctxs, ParseTree(tree, pid_, target)...)
 		}
 	}
 	return ctxs
 }
 
-func FillOutMemory(prog_ *prog.Prog, tracker *tracker.MemoryTracker) error {
-	if err := tracker.FillOutMemory(prog_); err != nil {
+func FillOutMemory(prog_ *prog.Prog, tracker_ *tracker.MemoryTracker) error {
+	if err := tracker_.FillOutMemory(prog_); err != nil {
 		return err
 	} else {
-		totalMemory := tracker.GetTotalMemoryAllocations(prog_)
+		totalMemory := tracker_.GetTotalMemoryAllocations(prog_)
 		if totalMemory == 0 {
 			fmt.Printf("length of zero mem prog: %d\n", totalMemory)
 		} else {
-			mmapCall := prog_.Target.MakeMmap(0, uint64(totalMemory))
 			calls := make([]*prog.Call, 0)
-			calls = append(append(calls, mmapCall), prog_.Calls...)
+			calls = append(append(calls, tracker.MakeMmap(prog_.Target, 0, uint64(totalMemory))), prog_.Calls...)
 			prog_.Calls = calls
 		}
-		if err := prog_.Validate(); err != nil {
+		if err := ValidateProg(prog_.Target, prog_); err != nil {
 			panic(fmt.Sprintf("Error validating program: %s\n", err.Error()))
 		}
 	}
 	return nil
 }
 
-
 func pack(dir, file string) {
-	files, err := ioutil.ReadDir(dir)
+	files, err := os.ReadDir(dir)
 	if err != nil {
 		Failf("failed to read dir: %v", err)
 	}
 	os.Remove(file)
-	db, err := db.Open(file)
+	db, err := db.Open(file, false)
 	db.BumpVersion(currentDBVersion)
 	if err != nil {
 		Failf("failed to open database file: %v", err)
 	}
 	fmt.Println("Deserializing programs => deserialized/")
 	for _, file := range files {
-		data, err := ioutil.ReadFile(filepath.Join(dir, file.Name()))
+		data, err := os.ReadFile(filepath.Join(dir, file.Name()))
 		if err != nil {
 			Failf("failed to read file %v: %v", file.Name(), err)
 		}

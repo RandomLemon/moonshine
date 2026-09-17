@@ -1,8 +1,7 @@
-scanner/lex.go
-scanner/strace.go
+# Generated scanners are CHECKED IN: they carry this fork's kcov "Cover:" line
+# handling and _IOC decoding, which upstream syz-trace2syz does not have.
+# Regenerate with `make generate` after editing the .rl/.y sources.
+corpus.db
 *.output
-.*
-!/.gitignore
-
 bin/
 deserialized/

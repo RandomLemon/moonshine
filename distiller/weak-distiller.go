@@ -1,18 +1,19 @@
 package distiller
 
 import (
-	"github.com/google/syzkaller/prog"
 	"fmt"
-	"sort"
+	"github.com/google/syzkaller/prog"
+	"github.com/shankarapailoor/moonshine/tracker"
 	"os"
+	"sort"
 )
 
 const (
 	pageSize = 4 << 10
 )
+
 var (
 	RADIUS int = 2
-
 )
 
 type WeakDistiller struct {
@@ -35,7 +36,6 @@ func (d *WeakDistiller) Add(seeds Seeds) {
 		d.CallToIdx[seed.Call] = seed.CallIdx
 	}
 }
-
 
 func (d *WeakDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog) {
 	seenIps := make(map[uint64]bool)
@@ -70,12 +70,14 @@ func (d *WeakDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog) {
 		state := seed.State
 		if err := d.CallToSeed[prog_.Calls[0]].State.Tracker.FillOutMemory(prog_); err != nil {
 			fmt.Printf("Error: %s\n", err.Error())
-            continue
+			continue
 		}
+		// The old distiller rewrote the (now unexported) ResultArg uses set to drop
+		// references to calls that are not part of this distilled program.
+		tracker.RelinkDependencies(prog_)
 		totalMemory := state.Tracker.GetTotalMemoryAllocations(prog_)
-		mmapCall := state.Target.MakeMmap(0, uint64(totalMemory/pageSize)+1)
 		calls := make([]*prog.Call, 0)
-		calls = append(append(calls, mmapCall), prog_.Calls...)
+		calls = append(append(calls, tracker.MakeMmap(state.Target, 0, uint64(totalMemory))), prog_.Calls...)
 
 		prog_.Calls = calls
 
@@ -120,7 +122,7 @@ func (d *WeakDistiller) GetNeighbors(seed *Seed) []*prog.Call {
 			break
 		} else {
 			lowIdx := seed.CallIdx - i
-			if seed.CallIdx - i < 0 {
+			if seed.CallIdx-i < 0 {
 				foundLowerNeighbors = true
 			} else {
 				c := seed.Prog.Calls[lowIdx]
@@ -138,7 +140,8 @@ func (d *WeakDistiller) GetNeighbors(seed *Seed) []*prog.Call {
 				}
 			}
 		}
-		i++; j++
+		i++
+		j++
 	}
 	seedCalls := append(upperNeighbors, lowerNeighbors...)
 	seedCalls = append(seedCalls, seed.Call)
@@ -149,7 +152,7 @@ func (d *WeakDistiller) GetNeighbors(seed *Seed) []*prog.Call {
 This is the core of the weak distiller. We start with the centroid and get all downstream dependents.
 Every call needs its upstream dependents to run correctly so we get those. We then pull all downstream dependents of
 those upstreams and if there are any new calls, we pull the upstream of them. We can keep going, but this is a heuristic
- */
+*/
 func (d *WeakDistiller) GetDependents(seedCalls []*prog.Call) []*prog.Call {
 	seenMap := make(map[int]bool, 0)
 	upstreamCalls := make([]*prog.Call, 0)

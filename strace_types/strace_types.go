@@ -1,13 +1,14 @@
 package strace_types
 
 import (
-	"fmt"
-	"strconv"
 	"bytes"
+	"fmt"
 	"github.com/google/syzkaller/prog"
+	"strconv"
 )
 
 type Operation int
+
 const (
 	OR = iota
 	AND
@@ -24,30 +25,29 @@ const (
 
 var (
 	Strace_ExpressionType = "Expression Type"
-	Strace_CallType = "Call Type"
-	Strace_IntType = "Int Type"
-	Strace_FieldType = "Field Type"
-	Strace_StructType = "Struct Type"
-	Strace_ArrayType = "Array Type"
-	Strace_PointerType = "Pointer Type"
-	Strace_BufferType = "Buffer Type"
-	Strace_FlagType = "Flag Type"
-	Strace_Ipv4Type = "Ipv4 Type"
-
+	Strace_CallType       = "Call Type"
+	Strace_IntType        = "Int Type"
+	Strace_FieldType      = "Field Type"
+	Strace_StructType     = "Struct Type"
+	Strace_ArrayType      = "Array Type"
+	Strace_PointerType    = "Pointer Type"
+	Strace_BufferType     = "Buffer Type"
+	Strace_FlagType       = "Flag Type"
+	Strace_Ipv4Type       = "Ipv4 Type"
 )
 
 type TraceTree struct {
 	TraceMap map[int64]*Trace
-	Ptree map[int64][]int64
-	RootPid int64
+	Ptree    map[int64][]int64
+	RootPid  int64
 	Filename string
 }
 
 func NewTraceTree() (tree *TraceTree) {
-	tree = &TraceTree {
+	tree = &TraceTree{
 		TraceMap: make(map[int64]*Trace),
-		Ptree : make(map[int64][]int64),
-		RootPid: -1,
+		Ptree:    make(map[int64][]int64),
+		RootPid:  -1,
 	}
 	return
 }
@@ -59,8 +59,7 @@ func (tree *TraceTree) Contains(pid int64) bool {
 	return false
 }
 
-
-func (tree *TraceTree) Add(call *Syscall) (*Syscall){
+func (tree *TraceTree) Add(call *Syscall) *Syscall {
 	if tree.RootPid < 0 {
 		tree.RootPid = call.Pid
 	}
@@ -85,7 +84,6 @@ func (tree *TraceTree) String() string {
 	return buf.String()
 }
 
-
 type Trace struct {
 	Calls []*Syscall
 }
@@ -95,7 +93,7 @@ func NewTrace() (trace *Trace) {
 	return
 }
 
-func (trace *Trace) Add(call *Syscall) (ret *Syscall){
+func (trace *Trace) Add(call *Syscall) (ret *Syscall) {
 	if call.Resumed {
 		lastCall := trace.Calls[len(trace.Calls)-1]
 		lastCall.Args = append(lastCall.Args, call.Args...)
@@ -109,23 +107,21 @@ func (trace *Trace) Add(call *Syscall) (ret *Syscall){
 	return
 }
 
-
-
 type Syscall struct {
 	CallName string
-	Args []Type
-	Pid int64
-	Ret int64
-	Cover []uint64
-	Paused bool
-	Resumed bool
+	Args     []Type
+	Pid      int64
+	Ret      int64
+	Cover    []uint64
+	Paused   bool
+	Resumed  bool
 }
 
 func NewSyscall(pid int64, name string,
-			args []Type,
-			ret int64,
-			paused bool,
-			resumed bool) (sys *Syscall) {
+	args []Type,
+	ret int64,
+	paused bool,
+	resumed bool) (sys *Syscall) {
 	sys = new(Syscall)
 	sys.CallName = name
 	sys.Args = args
@@ -158,11 +154,11 @@ type Type interface {
 
 type DynamicType struct {
 	BeforeCall *Expression
-	AfterCall *Expression
+	AfterCall  *Expression
 }
 
 func NewDynamicType(before, after Type) *DynamicType {
-	return &DynamicType{BeforeCall:  before.(*Expression), AfterCall: after.(*Expression)}
+	return &DynamicType{BeforeCall: before.(*Expression), AfterCall: after.(*Expression)}
 }
 
 func (d *DynamicType) String() string {
@@ -178,14 +174,14 @@ func (d *DynamicType) Eval(target *prog.Target) uint64 {
 }
 
 type Expression struct {
-	BinOp *Binop
-	Unop *Unop
-	FlagType *FlagType
+	BinOp     *Binop
+	Unop      *Unop
+	FlagType  *FlagType
 	FlagsType Flags
-	IntType *IntType
+	IntType   *IntType
 	MacroType *Macro
-	SetType *Set
-	IntsType Ints
+	SetType   *Set
+	IntsType  Ints
 }
 
 func NewExpression(typ Type) (exp *Expression) {
@@ -259,12 +255,12 @@ type Parenthetical struct {
 }
 
 func NewParenthetical() *Parenthetical {
-	return &Parenthetical{tmp:"tmp"};
+	return &Parenthetical{tmp: "tmp"}
 }
 
 type Macro struct {
 	MacroName string
-	Args []Type
+	Args      []Type
 }
 
 func NewMacroType(name string, args []Type) (typ *Macro) {
@@ -292,16 +288,32 @@ func (m *Macro) Eval(target *prog.Target) uint64 {
 	switch m.MacroName {
 	case "KERNEL_VERSION":
 		return (m.Args[0].Eval(target) << 16) + (m.Args[1].Eval(target) << 8) + m.Args[2].Eval(target)
+	case "_IOC":
+		// Linux include/uapi/asm-generic/ioctl.h
+		if len(m.Args) != 4 {
+			panic(fmt.Sprintf("_IOC macro expects 4 args, got %d", len(m.Args)))
+		}
+		dir := m.Args[0].Eval(target)
+		ioctlType := m.Args[1].Eval(target)
+		nr := m.Args[2].Eval(target)
+		size := m.Args[3].Eval(target)
+		const (
+			iocNrShift   = 0
+			iocTypeShift = 8
+			iocSizeShift = 16
+			iocDirShift  = 30
+		)
+		return (dir << iocDirShift) | (ioctlType << iocTypeShift) | (nr << iocNrShift) | (size << iocSizeShift)
 	}
 	panic("Eval called on macro type")
 }
 
 type Call struct {
 	CallName string
-	Args []Type
+	Args     []Type
 }
 
-func NewCallType(name string, args []Type) (typ *Call){
+func NewCallType(name string, args []Type) (typ *Call) {
 	typ = new(Call)
 	typ.CallName = name
 	typ.Args = args
@@ -329,11 +341,11 @@ func (c *Call) Eval(target *prog.Target) uint64 {
 
 type Binop struct {
 	Operand1 *Expression
-	Op Operation
+	Op       Operation
 	Operand2 *Expression
 }
 
-func NewBinop(operand1 Type, op Operation, operand2 Type) (b *Binop){
+func NewBinop(operand1 Type, op Operation, operand2 Type) (b *Binop) {
 	b = new(Binop)
 	b.Operand1 = operand1.(*Expression)
 	b.Op = op
@@ -362,17 +374,17 @@ func (b *Binop) Eval(target *prog.Target) uint64 {
 	}
 }
 
-func (b *Binop) String() string{
+func (b *Binop) String() string {
 	return fmt.Sprintf("op1: %s op2: %s, operand: %v\n", b.Operand1.String(), b.Operand2.String(), b.Op)
 }
 
-func (b *Binop) Name() string{
+func (b *Binop) Name() string {
 	return "Binop"
 }
 
 type Unop struct {
 	Operand *Expression
-	Op Operation
+	Op      Operation
 }
 
 func NewUnop(operand Type, op Operation) (u *Unop) {
@@ -392,11 +404,11 @@ func (u *Unop) Eval(target *prog.Target) uint64 {
 	}
 }
 
-func (u *Unop) String() string{
+func (u *Unop) String() string {
 	return fmt.Sprintf("op1: %v operand: %v\n", u.Operand, u.Op)
 }
 
-func (u *Unop) Name() string{
+func (u *Unop) Name() string {
 	return "Unop"
 }
 
@@ -430,7 +442,7 @@ type IntType struct {
 
 func NewIntsType(vals []int64) Ints {
 	ints := make([]*IntType, 0)
-	for _, v := range(vals) {
+	for _, v := range vals {
 		ints = append(ints, NewIntType(v))
 	}
 	return ints
@@ -452,7 +464,7 @@ func (i *IntType) Name() string {
 
 func (i *IntType) String() string {
 	v := strconv.FormatInt(i.Val, 10)
- 	return fmt.Sprintf("%s", v)
+	return fmt.Sprintf("%s", v)
 }
 
 type Flags []*FlagType
@@ -525,7 +537,6 @@ func (f *FlagType) Eval(target *prog.Target) uint64 {
 	panic(fmt.Sprintf("Failed to eval flag: %s\n", f.String()))
 }
 
-
 func (f *FlagType) Name() string {
 	return Strace_FlagType
 }
@@ -538,7 +549,7 @@ type Set struct {
 	Exprs []*Expression
 }
 
-func NewSet(exprs []*Expression) *Set{
+func NewSet(exprs []*Expression) *Set {
 	return &Set{
 		Exprs: exprs,
 	}
@@ -580,7 +591,7 @@ func (b *BufferType) Eval(target *prog.Target) uint64 {
 
 type PointerType struct {
 	Address uint64
-	Res Type
+	Res     Type
 }
 
 func NewPointerType(addr uint64, res Type) (typ *PointerType) {
@@ -620,7 +631,6 @@ func (p *PointerType) Eval(target *prog.Target) uint64 {
 	panic("Eval called for PointerType")
 }
 
-
 type StructType struct {
 	Fields []Type
 }
@@ -653,7 +663,7 @@ func (s *StructType) Eval(target *prog.Target) uint64 {
 
 type ArrayType struct {
 	Elems []Type
-	Len int
+	Len   int
 }
 
 func NewArrayType(elems []Type) (typ *ArrayType) {

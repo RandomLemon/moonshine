@@ -1,26 +1,26 @@
 package scanner
 
 import (
-	"fmt"
-	"io/ioutil"
 	"bufio"
-	"strings"
+	"fmt"
+	. "github.com/shankarapailoor/moonshine/logging"
+	"github.com/shankarapailoor/moonshine/strace_types"
+	"os"
 	"strconv"
-	"github.com/RandomLemon/moonshine/strace_types"
-	. "github.com/RandomLemon/moonshine/logging"
+	"strings"
 )
 
-const(
-	maxBufferSize = 64*1024*1024
-	CoverDelim = ","
-	CoverID = "Cover:"
-	SYSRESTART = "ERESTART"
-	SignalPlus = "+++"
-	SignalMinus = "---"
+const (
+	maxBufferSize = 64 * 1024 * 1024
+	CoverDelim    = ","
+	CoverID       = "Cover:"
+	SYSRESTART    = "ERESTART"
+	SignalPlus    = "+++"
+	SignalMinus   = "---"
 )
 
 func parseIps(line string) []uint64 {
-	line = line[1: len(line)-1] //Remove quotes
+	line = line[1 : len(line)-1] //Remove quotes
 	ips := strings.Split(strings.Split(line, CoverID)[1], CoverDelim)
 	cover_set := make(map[uint64]bool, 0)
 	cover := make([]uint64, 0)
@@ -83,7 +83,7 @@ func Parse(filename string) *strace_types.TraceTree {
 	var data []byte
 	var err error
 
-	if data, err = ioutil.ReadFile(filename); err != nil {
+	if data, err = os.ReadFile(filename); err != nil {
 		Failf("error reading file: %s\n", err.Error())
 	}
 	buf := make([]byte, maxBufferSize)

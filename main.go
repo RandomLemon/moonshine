@@ -72,6 +72,12 @@ func ParseTraces(target *prog.Target) []*Context {
 	}
 	seeds := make(distiller.Seeds, 0)
 	totalFiles := len(names)
+	// Programs are written into deserialized/; create it so a fresh checkout
+	// works without a manual mkdir.
+	if err := os.MkdirAll("deserialized", 0755); err != nil {
+		Failf("failed to create deserialized dir: %v", err)
+	}
+
 	fmt.Printf("Total Number of Files: %d\n", totalFiles)
 	for i, file := range names {
 		fmt.Printf("Parsing File %d/%d: %s\n", i+1, totalFiles, path.Base(names[i]))

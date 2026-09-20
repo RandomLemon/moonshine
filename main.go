@@ -42,6 +42,7 @@ func main() {
 		Failf("error getting target: %v, git revision: %v", err.Error(), rev)
 	} else {
 		BuildIoctlVariants(target)
+		BuildDeviceBindings(target)
 		ParseTraces(target)
 		pack("deserialized", "corpus.db")
 	}

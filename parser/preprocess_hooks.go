@@ -22,6 +22,9 @@ var PreprocessMap = map[string]PreprocessHook{
 	"accept4":     Preprocess_Accept,
 	"bind":        Preprocess_Bind,
 	"connect":     Preprocess_Connect,
+	"dup":         Preprocess_Dup,
+	"dup2":        Preprocess_Dup,
+	"dup3":        Preprocess_Dup,
 	"fcntl":       Preprocess_Fcntl,
 	"getsockname": Preprocess_Getsockname,
 	"getsockopt":  Preprocess_Getsockopt,
@@ -169,6 +172,9 @@ func Preprocess_Recvfrom(ctx *Context) {
 }
 
 func Preprocess_Open(ctx *Context) {
+	if selectOpenDev(ctx, 0) {
+		return
+	}
 	if len(ctx.CurrentStraceCall.Args) < 3 {
 		ctx.CurrentStraceCall.Args = append(ctx.CurrentStraceCall.Args,
 			strace_types.NewExpression(strace_types.NewIntType(int64(0))))
@@ -183,9 +189,26 @@ func Preprocess_Mknod(ctx *Context) {
 }
 
 func Preprocess_Openat(ctx *Context) {
+	if selectOpenDev(ctx, 1) {
+		return
+	}
 	if len(ctx.CurrentSyzCall.Args) < 4 {
 		ctx.CurrentStraceCall.Args = append(ctx.CurrentStraceCall.Args,
 			strace_types.NewExpression(strace_types.NewIntType(int64(0))))
+	}
+}
+
+// Preprocess_Dup keeps the device identity of a duplicated descriptor. The
+// generic dup/dup2/dup3 return a plain fd, so without the variant every later
+// ioctl on the duplicate falls back to the unconstrained ioctl description.
+func Preprocess_Dup(ctx *Context) {
+	suffix, ok := dupVariantSuffix(ctx)
+	if !ok {
+		return
+	}
+	name := ctx.CurrentStraceCall.CallName + "$" + suffix
+	if meta, ok := ctx.Target.SyscallMap[name]; ok {
+		ctx.CurrentSyzCall.Meta = meta
 	}
 }
 

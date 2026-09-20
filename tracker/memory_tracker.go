@@ -7,6 +7,12 @@ import (
 )
 
 const (
+	// memAllocMaxMem is the address space a converted program can use: the
+	// target's data region, NumPages*PageSize (16 MiB on linux/amd64).
+	// prog.PointerArg.validate rejects any pointer whose address+size leaves that
+	// region, so raising this limit does not make larger programs representable --
+	// it only turns "skip this program" into a validation panic. Traced VMAs that
+	// cannot fit are dropped at parse time instead (see strace_types.Unsupported).
 	memAllocMaxMem = 16 << 20
 )
 

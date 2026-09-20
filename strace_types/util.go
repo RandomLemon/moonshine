@@ -20,12 +20,26 @@ var (
 
 	Unsupported = map[string]bool{
 		"brk": true,
-		//"mprotect": true,
-		//"munmap": true,
-		"":       true,
-		"execve": true, // unsupported
-		"access": true, // unsupported
-		//"mmap": true, // don't need, we generate our own
+		// Virtual memory management calls are dropped. A converted program can
+		// only address the target's data region (NumPages*PageSize, 16 MiB on
+		// linux/amd64 -- see prog.PointerArg.validate), while a real CUDA process
+		// maps gigabytes: the sample trace alone reserves 4.8 GiB of PROT_NONE
+		// memory, maps 262 MiB of libraries/driver memory and 20 MiB of anonymous
+		// heap. Such mappings cannot be relocated into the data region, and they
+		// are not needed either: every syscall's pointer arguments are placed in
+		// the data region by the tracker's allocations (parser.addr), so no
+		// ioctl/read/write argument ever refers to a traced mapping. trace2syz
+		// skips the same set (utils.ShouldSkip) and its corpus loads with
+		// ok=1 bad=0.
+		"mmap":     true, // don't need, we generate our own
+		"mremap":   true, // knowing vma location is difficult
+		"mprotect": true,
+		"munmap":   true,
+		"msync":    true,
+		"madvise":  true,
+		"":         true,
+		"execve":   true, // unsupported
+		"access":   true, // unsupported
 		//		"sendmsg": true, //TODO: the addr arg in msg_name struct is all wonky and ordering of args is off
 		//		"recvmsg": true, //TODO: the addr arg in msg_name struct is all wonky and ordering of args is off
 		"gettimeofday": true, // unsupported
@@ -33,8 +47,7 @@ var (
 		//"keyctl": true,
 		//"shmctl": true,
 		//"getsockname": true,
-		"arch_prctl": true,
-		//"mremap": true, // knowing vma location is difficult
+		"arch_prctl":    true,
 		"getcwd":        true, // unsupported
 		"setdomainname": true, // unsupported
 		"reboot":        true, // unsupported

@@ -41,6 +41,7 @@ func main() {
 	if err != nil {
 		Failf("error getting target: %v, git revision: %v", err.Error(), rev)
 	} else {
+		BuildIoctlVariants(target)
 		ParseTraces(target)
 		pack("deserialized", "corpus.db")
 	}

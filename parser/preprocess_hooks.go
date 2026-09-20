@@ -195,8 +195,37 @@ func Preprocess_Ioctl(ctx *Context) {
 		ctx.CurrentStraceCall.CallName += suffix
 	} else if _, ok := ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName+"$"+ioctlCmd]; ok {
 		ctx.CurrentStraceCall.CallName += "$" + ioctlCmd
+	} else if suffix := ioctlVariantSuffix(ctx); suffix != "" {
+		// The command was printed as an _IOC(...) macro, so there is no name to
+		// look up; select the variant by (device resource, command value).
+		ctx.CurrentStraceCall.CallName += "$" + suffix
 	}
 	ctx.CurrentSyzCall.Meta = ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName]
+}
+
+// ioctlVariantSuffix resolves the fd argument to the device resource it was
+// opened as and looks the command value up in the variant table.
+func ioctlVariantSuffix(ctx *Context) string {
+	if len(ctx.CurrentStraceCall.Args) < 2 {
+		return ""
+	}
+	syzFd, ok := ctx.CurrentSyzCall.Meta.Args[0].Type.(*prog.ResourceType)
+	if !ok {
+		return ""
+	}
+	arg := ctx.Cache.Get(syzFd, ctx.CurrentStraceCall.Args[0])
+	if arg == nil {
+		return ""
+	}
+	res, ok := arg.Type().(*prog.ResourceType)
+	if !ok {
+		return ""
+	}
+	cmd, ok := ctx.CurrentStraceCall.Args[1].(*strace_types.Expression)
+	if !ok {
+		return ""
+	}
+	return lookupIoctlVariant(res, cmd.Eval(ctx.Target))
 }
 
 func Preprocess_Fcntl(ctx *Context) {

@@ -112,6 +112,18 @@ func buildDupVariantSuffixes(target *prog.Target) map[string]string {
 	return m
 }
 
+// openDevVariant returns the suffix of the syz_open_dev$* variant whose path
+// template matches path, plus the device index captured by its '#' wildcard.
+// The path must already be stripped of its trailing NUL bytes.
+func openDevVariant(path string) (string, int, bool) {
+	for _, pat := range openDevPatterns {
+		if matched, id := pat.matchPath(path); matched {
+			return pat.suffix, id, true
+		}
+	}
+	return "", 0, false
+}
+
 // selectOpenDev rebinds an open()/openat() call to the syz_open_dev$<dev>
 // variant whose path template matches the traced path; pathIdx is the index of
 // the path argument. The call is rewritten to syz_open_dev's (dev, id, flags)
@@ -128,27 +140,23 @@ func selectOpenDev(ctx *Context, pathIdx int) bool {
 	if !ok {
 		return false
 	}
-	path := strings.TrimRight(buf.Val, "\x00")
-	for _, pat := range openDevPatterns {
-		matched, id := pat.matchPath(path)
-		if !matched {
-			continue
-		}
-		meta, ok := ctx.Target.SyscallMap["syz_open_dev$"+pat.suffix]
-		if !ok {
-			continue
-		}
-		if id < 0 {
-			id = 0
-		}
-		ctx.CurrentSyzCall.Meta = meta
-		bound := make([]strace_types.Type, 0, len(args)+1)
-		bound = append(bound, args[pathIdx],
-			strace_types.NewExpression(strace_types.NewIntType(int64(id))))
-		ctx.CurrentStraceCall.Args = append(bound, args[pathIdx+1:]...)
-		return true
+	suffix, id, ok := openDevVariant(strings.TrimRight(buf.Val, "\x00"))
+	if !ok {
+		return false
 	}
-	return false
+	meta, ok := ctx.Target.SyscallMap["syz_open_dev$"+suffix]
+	if !ok {
+		return false
+	}
+	if id < 0 {
+		id = 0
+	}
+	ctx.CurrentSyzCall.Meta = meta
+	bound := make([]strace_types.Type, 0, len(args)+1)
+	bound = append(bound, args[pathIdx],
+		strace_types.NewExpression(strace_types.NewIntType(int64(id))))
+	ctx.CurrentStraceCall.Args = append(bound, args[pathIdx+1:]...)
+	return true
 }
 
 // dupVariantSuffix returns the dup/dup2/dup3 variant suffix that preserves the

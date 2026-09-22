@@ -611,7 +611,12 @@ func Parse_ResourceType(syzType *prog.ResourceType, dir prog.Dir, straceType str
 	case *strace_types.Expression:
 		val := a.Eval(ctx.Target)
 		if arg := ctx.Cache.Get(syzType, straceType); arg != nil {
-			res := strace_types.ResultArg(arg.Type(), dir, arg.(*prog.ResultArg), strace_types.DefaultValue(arg.Type()))
+			// The cache is keyed by the root resource kind, so the cached
+			// argument can be typed more specifically than the type this call
+			// declares (an eventfd returns fd_event, but fcntl takes fd). The
+			// reference must carry the type the call expects; the narrower
+			// producer type stays on the producer's return value.
+			res := strace_types.ResultArg(syzType, dir, arg.(*prog.ResultArg), syzType.Default())
 			return res, nil
 		}
 		res := strace_types.ResultArg(syzType, dir, nil, val)
@@ -837,6 +842,9 @@ func SanitizeFilename(filename string) string {
 
 func shouldSkip(ctx *Context) bool {
 	syscall := ctx.CurrentStraceCall
+	if skipAbsolutePath(syscall) {
+		return true
+	}
 	switch syscall.CallName {
 	case "write":
 		switch a := syscall.Args[0].(type) {

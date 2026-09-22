@@ -266,36 +266,57 @@ func (m *MemoryTracker) Simplify(prog *Prog, distilled *Prog) *MemoryTracker {
 	return newTracker
 }
 
-func (m *MemoryTracker) FillOutMemory(prog *Prog) error {
+// packAllocations walks the tracked allocations in program order and hands each
+// one the address it occupies in the program's data region, returning the total
+// size the region needs. Addresses must be assigned by exactly one walk that the
+// mmap sizing also performs, or an argument can end up outside the region the
+// program maps; passing a nil set function only measures.
+func (m *MemoryTracker) packAllocations(prog *Prog, set func(arg *PointerArg, offset uint64)) (uint64, error) {
 	offset := uint64(0)
-
 	for _, call := range prog.Calls {
 		log.Logf(3, "call: %s", call.Meta.CallName)
 		if _, ok := m.allocations[call]; !ok {
 			log.Logf(3, "skipping allocations")
 			continue
 		}
-		i := 0
 		for _, a := range m.allocations[call] {
-			switch arg := a.arg.(type) {
-			case *PointerArg:
-				arg.Address = offset
-				offset += a.num_bytes
-				i += 1
-				log.Logf(5, "offset: %v/%v", offset, memAllocMaxMem)
-				if arg.Address >= memAllocMaxMem {
-					return fmt.Errorf("Unable to allocate space to store arg: %#v"+
-						"in Call: %v. Required memory is larger than what is allowed by Syzkaller."+
-						"Offending address: %d. Skipping seed generation for this prog...\n",
-						arg, call, arg.Address)
-				}
-			default:
+			arg, ok := a.arg.(*PointerArg)
+			if !ok {
 				panic("Pointer Arg Failed")
 			}
+			// A pointer with no pointee is a bare address range (a vma
+			// argument): prog.MakeVmaPointerArg rejects addresses that are not
+			// aligned to 1024, and the range must stay inside the data region
+			// (prog.PointerArg.validate). Arguments are packed back to back, so
+			// start such a range on a page boundary.
+			if arg.Res == nil && offset%PageSize != 0 {
+				offset = (offset/PageSize + 1) * PageSize
+			}
+			if set != nil {
+				set(arg, offset)
+			}
+			log.Logf(5, "offset: %v/%v", offset, memAllocMaxMem)
+			if offset >= memAllocMaxMem {
+				return 0, fmt.Errorf("Unable to allocate space to store arg: %#v"+
+					"in Call: %v. Required memory is larger than what is allowed by Syzkaller."+
+					"Offending address: %d. Skipping seed generation for this prog...\n",
+					arg, call, offset)
+			}
+			offset += a.num_bytes
 		}
 	}
 	if offset%PageSize > 0 {
 		offset = (offset/PageSize + 1) * PageSize
+	}
+	return offset, nil
+}
+
+func (m *MemoryTracker) FillOutMemory(prog *Prog) error {
+	offset, err := m.packAllocations(prog, func(arg *PointerArg, addr uint64) {
+		arg.Address = addr
+	})
+	if err != nil {
+		return err
 	}
 	log.Logf(5, "Offset: %d", offset)
 
@@ -324,17 +345,11 @@ func (m *MemoryTracker) FillOutMemory(prog *Prog) error {
 }
 
 func (m *MemoryTracker) GetTotalMemoryAllocations(prog *Prog) uint64 {
-	sum := uint64(0)
-	for _, call := range prog.Calls {
-		if _, ok := m.allocations[call]; !ok {
-			continue
-		}
-		for _, a := range m.allocations[call] {
-			sum += a.num_bytes
-		}
-	}
-	if sum%PageSize > 0 {
-		sum = (sum/PageSize + 1) * PageSize
+	sum, err := m.packAllocations(prog, nil)
+	if err != nil {
+		// FillOutMemory reports the same condition; the caller only sizes the
+		// program's data region with this value.
+		log.Logf(2, "Failed to pack allocations: %s", err)
 	}
 	return sum
 }

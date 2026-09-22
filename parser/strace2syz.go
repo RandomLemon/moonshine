@@ -266,6 +266,24 @@ func Parse_ArrayType(syzType *prog.ArrayType, dir prog.Dir, straceType strace_ty
 				Failf("Error parsing array elem: %s\n", err.Error())
 			}
 		}
+	case *strace_types.StructType:
+		/*
+		 * An array whose element is a struct - e.g. NV_ESC_CARD_INFO,
+		 * described as ptr[out, array[nv_ioctl_card_info, 32]] - arrives
+		 * as a single struct because strace renders only the populated
+		 * element.  trace2syz's genArray handles this (its parser has one
+		 * combined GroupType for arrays and structs); the two cases below
+		 * keep the same behaviour, so an unmodelled element degrades to a
+		 * default value instead of aborting the trace.
+		 */
+		if dir == prog.DirOut {
+			return GenDefaultArg(syzType, dir, ctx), nil
+		}
+		if arg, err := parseArgs(syzType.Elem, dir, a, ctx); err == nil {
+			args = append(args, arg)
+		} else {
+			args = append(args, GenDefaultArg(syzType.Elem, dir, ctx))
+		}
 	case *strace_types.Field:
 		return Parse_ArrayType(syzType, dir, a.Val, ctx)
 	case *strace_types.PointerType, *strace_types.Expression, *strace_types.BufferType:

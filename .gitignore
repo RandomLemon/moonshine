@@ -5,3 +5,6 @@ corpus.db
 *.output
 bin/
 deserialized/
+# Written by the -distill run; the path is set by the distillation config
+# (getting-started/distill.json) and appended to on every run.
+distillStats

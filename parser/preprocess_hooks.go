@@ -213,42 +213,122 @@ func Preprocess_Dup(ctx *Context) {
 }
 
 func Preprocess_Ioctl(ctx *Context) {
-	ioctlCmd := ctx.CurrentStraceCall.Args[1].String()
-	if suffix, ok := strace_types.Ioctl_map[ioctlCmd]; ok {
-		ctx.CurrentStraceCall.CallName += suffix
-	} else if _, ok := ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName+"$"+ioctlCmd]; ok {
-		ctx.CurrentStraceCall.CallName += "$" + ioctlCmd
-	} else if suffix := ioctlVariantSuffix(ctx); suffix != "" {
-		// The command was printed as an _IOC(...) macro, so there is no name to
-		// look up; select the variant by (device resource, command value).
-		ctx.CurrentStraceCall.CallName += "$" + suffix
-	}
+	suffix := ioctlVariantSuffixFor(ctx, ctx.CurrentStraceCall.Args[1].String())
+	ctx.CurrentStraceCall.CallName += suffix
 	ctx.CurrentSyzCall.Meta = ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName]
+}
+
+// ioctlVariantSuffixFor decides which ioctl$* variant a call names and returns
+// the suffix to append ("" for the plain ioctl).
+//
+// Three sources are consulted:
+//  1. Ioctl_map, the hand-written table of strace command names whose
+//     description counterpart carries a different suffix (FIONBIO and friends);
+//  2. the (device resource, command value) table, which is what separates
+//     variants sharing one printed name - NV_ESC_RM_ALLOC is declared for both
+//     /dev/nvidiactl and /dev/nvidiaN under that single name;
+//  3. the printed name itself, which decides when the fd was not tracked.
+func ioctlVariantSuffixFor(ctx *Context, name string) string {
+	if suffix, ok := strace_types.Ioctl_map[name]; ok {
+		return suffix
+	}
+	byName := ""
+	if _, ok := ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName+"$"+name]; ok {
+		byName = "$" + name
+	}
+	// A printed command name identifies the command but not the device it was
+	// issued on, and the description models those as separate variants with
+	// identical spelling, so the name can only ever resolve to the one the map
+	// holds. When that variant is not declared for this call's device, the
+	// (device, value) table is the only source that can tell them apart.
+	if !ioctlNameDeclaredForFd(ctx, name) {
+		if byValue := ioctlVariantSuffix(ctx); byValue != "" {
+			// The table stores the variant name up to its first '$', which for
+			// doubly-suffixed variants is a prefix rather than a syscall, so
+			// only accept an answer that names one.
+			if _, ok := ctx.Target.SyscallMap["ioctl$"+byValue]; ok {
+				return "$" + byValue
+			}
+		}
+	}
+	return byName
+}
+
+// ioctlNameDeclaredForFd reports whether ioctl$<name> is declared on the device
+// the ioctl fd argument was opened as. It is true when the fd was not tracked,
+// since there is then nothing to contradict the printed name.
+func ioctlNameDeclaredForFd(ctx *Context, name string) bool {
+	meta, ok := ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName+"$"+name]
+	if !ok {
+		return false
+	}
+	declared, ok := meta.Args[0].Type.(*prog.ResourceType)
+	if !ok {
+		return true
+	}
+	res := ioctlFdResource(ctx)
+	if res == nil {
+		return true
+	}
+	for _, kind := range res.Desc.Kind {
+		if kind == declared.TypeName {
+			return true
+		}
+	}
+	return false
+}
+
+// ioctlFdResource returns the resource type the ioctl fd argument was opened as,
+// or nil when no open/dup hook bound it.
+func ioctlFdResource(ctx *Context) *prog.ResourceType {
+	if len(ctx.CurrentStraceCall.Args) < 1 {
+		return nil
+	}
+	syzFd, ok := ctx.CurrentSyzCall.Meta.Args[0].Type.(*prog.ResourceType)
+	if !ok {
+		return nil
+	}
+	arg := ctx.Cache.Get(syzFd, ctx.CurrentStraceCall.Args[0])
+	if arg == nil {
+		return nil
+	}
+	res, ok := arg.Type().(*prog.ResourceType)
+	if !ok {
+		return nil
+	}
+	return res
 }
 
 // ioctlVariantSuffix resolves the fd argument to the device resource it was
 // opened as and looks the command value up in the variant table.
 func ioctlVariantSuffix(ctx *Context) string {
-	if len(ctx.CurrentStraceCall.Args) < 2 {
-		return ""
-	}
-	syzFd, ok := ctx.CurrentSyzCall.Meta.Args[0].Type.(*prog.ResourceType)
-	if !ok {
-		return ""
-	}
-	arg := ctx.Cache.Get(syzFd, ctx.CurrentStraceCall.Args[0])
-	if arg == nil {
-		return ""
-	}
-	res, ok := arg.Type().(*prog.ResourceType)
-	if !ok {
+	res := ioctlFdResource(ctx)
+	if res == nil {
 		return ""
 	}
 	cmd, ok := ctx.CurrentStraceCall.Args[1].(*strace_types.Expression)
 	if !ok {
 		return ""
 	}
-	return lookupIoctlVariant(res, cmd.Eval(ctx.Target))
+	value, ok := ioctlCmdValue(ctx, cmd)
+	if !ok {
+		return ""
+	}
+	return lookupIoctlVariant(res, value)
+}
+
+// ioctlCmdValue evaluates an ioctl command argument, reporting failure instead
+// of panicking: strace_types evaluates names through the target's constant map
+// and aborts the process on a name it does not define, but a command that has no
+// constant is one the description does not model, and for those the printed name
+// is the only answer either way.
+func ioctlCmdValue(ctx *Context, cmd *strace_types.Expression) (value uint64, ok bool) {
+	defer func() {
+		if recover() != nil {
+			value, ok = 0, false
+		}
+	}()
+	return cmd.Eval(ctx.Target), true
 }
 
 func Preprocess_Fcntl(ctx *Context) {
